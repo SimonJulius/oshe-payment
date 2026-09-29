@@ -1,1 +1,2 @@
 # payment-gateway and merchant-acquiring
+OshePayment is a multi-tenant merchant acquiring and payment gateway platform that enables businesses to accept digital payments through hosted checkout, payment links, QR codes, card-not-present transactions, and APIs, while handling transaction processing, platform fees, merchant balances, and settlements.
