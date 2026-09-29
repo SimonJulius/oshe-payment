@@ -14,5 +14,5 @@ The project intentionally begins as a modular monolith to keep development and o
 
 ## Documentation
 
-- [Architecture Overview](./docs/architectures/overview.md)
+- [Architecture Overview](./docs/architecture/overview.md)
 - [Architecture Decision Records](./docs/adr/)
