@@ -1,0 +1,486 @@
+# ADR-002: Start OshePayment as a Modular Monolith
+
+## Status
+
+Accepted
+
+## Context
+
+OshePayment is intended to become a merchant acquiring and payment gateway platform with multiple business capabilities, including:
+
+- Merchant management
+- Payments
+- Checkout
+- Payment links
+- QR payments
+- Ledger
+- Balances
+- Settlements
+- Webhooks
+- Reconciliation
+- Developer APIs
+- Future POS and terminal capabilities
+
+Several of these capabilities may eventually require different scaling, availability, security, or deployment characteristics.
+
+A microservice architecture is therefore a possible long-term evolution for the platform.
+
+However, OshePayment is currently at an early stage. The business domains are still being defined, the initial product is being developed by a single engineer, and there are not yet demonstrated requirements that justify independently deployed services.
+
+Starting directly with microservices would introduce significant infrastructure and operational complexity before the core payment domain has been properly established.
+
+Examples include:
+
+- Inter-service communication
+- Service discovery
+- Distributed tracing
+- Cross-service authentication
+- Message brokers
+- Distributed transactions
+- Network failure handling
+- Eventual consistency
+- Deployment coordination
+- Multiple databases
+- Local development complexity
+- Increased observability requirements
+
+Introducing these concerns immediately would increase the amount of infrastructure work required while providing limited product value during the early stages of the project.
+
+## Decision
+
+OshePayment will initially be implemented as a **modular monolith**.
+
+The backend will run as a single deployable application while maintaining explicit boundaries between business domains.
+
+Initial domain modules may include:
+
+```text
+Identity
+Merchant
+Payment
+Checkout
+Payment Link
+QR Payment
+Ledger
+Balance
+Settlement
+Webhook
+```
+
+These modules exist within the same application but should be treated as independent business boundaries.
+
+A module should expose only the behavior that other modules require and should avoid exposing its internal implementation details.
+
+The modular monolith should be structured so that selected modules can later be extracted into independently deployable services if justified by operational or business requirements.
+
+## Rationale
+
+### 1. Lower Initial Complexity
+
+A single deployable application reduces the infrastructure required to start developing OshePayment.
+
+Early development can focus on understanding and implementing the payment domain instead of immediately solving distributed-systems problems.
+
+This keeps the initial architecture easier to:
+
+- Develop
+- Test
+- Debug
+- Run locally
+- Deploy
+- Observe
+
+### 2. Domain Boundaries Can Be Established Without Microservices
+
+Microservices are not required to achieve modularity.
+
+OshePayment can maintain strong domain boundaries inside a single application by ensuring that each module has clear responsibilities and controlled dependencies.
+
+For example:
+
+```text
+Merchant Module
+      │
+      ▼
+Payment Module
+      │
+      ▼
+Ledger Module
+      │
+      ▼
+Settlement Module
+```
+
+Each module should own its business rules and avoid direct access to another module's internal implementation where practical.
+
+This allows the domain model to mature before introducing network boundaries.
+
+### 3. Easier Refactoring While the Domain Is Still Evolving
+
+The correct service boundaries for a payment platform may not be obvious at the beginning.
+
+Prematurely creating independent services risks locking the system into incorrect boundaries.
+
+A modular monolith allows modules to be:
+
+- Renamed
+- Split
+- Combined
+- Refactored
+- Reorganized
+
+with significantly less operational cost than independently deployed services.
+
+This is especially important while learning more about the payment domain.
+
+### 4. Simpler Transactions
+
+Financial systems require strong consistency for certain operations.
+
+Some workflows may initially require atomic database transactions across closely related business operations.
+
+Keeping these operations within a single process and database environment makes transaction handling simpler during the early stages of the project.
+
+As the architecture evolves, boundaries that require eventual consistency can be introduced intentionally.
+
+### 5. Easier Local Development
+
+A microservice architecture could require running:
+
+```text
+API Gateway
+Merchant Service
+Payment Service
+Ledger Service
+Settlement Service
+Webhook Service
+Message Broker
+Multiple Databases
+Observability Infrastructure
+```
+
+before a developer can process a single test payment.
+
+The initial modular monolith reduces this to something closer to:
+
+```text
+OshePayment API
+PostgreSQL
+```
+
+Additional infrastructure can be introduced gradually as requirements emerge.
+
+### 6. Faster Feedback During Learning
+
+OshePayment is also a learning project.
+
+The project is intended to deepen understanding of:
+
+- Go
+- Backend engineering
+- Payment systems
+- Database design
+- Concurrency
+- Distributed systems
+- DevOps
+
+Starting with a modular monolith allows these areas to be learned progressively rather than simultaneously.
+
+The architecture should increase in complexity as the developer's understanding and the system requirements increase.
+
+## Module Design Principles
+
+Although OshePayment will initially run as one application, it should not become an unstructured monolith.
+
+The following principles should guide module design.
+
+### Business-Oriented Modules
+
+Modules should primarily represent business capabilities rather than generic technical layers.
+
+Preferred:
+
+```text
+merchant/
+payment/
+ledger/
+settlement/
+```
+
+Rather than structuring the entire application only as:
+
+```text
+controllers/
+services/
+repositories/
+models/
+```
+
+Technical layers may still exist within individual modules where useful.
+
+### Controlled Dependencies
+
+Modules should avoid importing another module's internal implementation.
+
+Where communication is required, modules should interact through explicit contracts or exported behavior.
+
+### Data Ownership
+
+Each module should conceptually own the data associated with its domain.
+
+For example:
+
+```text
+Merchant Module
+→ Merchant data
+
+Payment Module
+→ Payment data
+
+Ledger Module
+→ Ledger data
+
+Settlement Module
+→ Settlement data
+```
+
+The initial implementation may use the same PostgreSQL instance, but shared infrastructure should not imply shared ownership of every table.
+
+### Avoid Circular Dependencies
+
+The module graph should remain directional where possible.
+
+Circular dependencies between domains should be treated as an architectural warning.
+
+### Explicit Domain Operations
+
+Business logic should live within the domain responsible for it.
+
+For example, ledger posting rules should not be implemented inside HTTP handlers or the merchant module.
+
+## Initial Deployment Model
+
+The initial deployment model will be:
+
+```text
+┌──────────────────────────────┐
+│       OshePayment API        │
+│                              │
+│     Modular Monolith         │
+│                              │
+│ Merchant                     │
+│ Payment                      │
+│ Ledger                       │
+│ Settlement                   │
+│ ...                          │
+└───────────────┬──────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│          PostgreSQL          │
+└──────────────────────────────┘
+```
+
+The application may be containerized using Docker.
+
+Additional infrastructure should be introduced only when a concrete requirement exists.
+
+## Evolution Toward Microservices
+
+The modular monolith is not intended to permanently prevent distributed architecture.
+
+A module may become a candidate for extraction when there is evidence that independent deployment provides meaningful benefits.
+
+Possible reasons include:
+
+- Independent scaling requirements
+- Different availability requirements
+- High resource usage
+- Security isolation requirements
+- Failure isolation requirements
+- Different deployment cadence
+- Operational complexity within the monolith
+- Independent team ownership
+- Technology requirements that differ from the rest of the application
+
+For example, the architecture might eventually evolve from:
+
+```text
+OshePayment Modular Monolith
+├── Merchant
+├── Payment
+├── Ledger
+├── Settlement
+└── Webhook
+```
+
+to:
+
+```text
+API Gateway
+    │
+    ├── Merchant Service
+    ├── Payment Service
+    ├── Ledger Service
+    ├── Settlement Service
+    └── Webhook Service
+```
+
+Such extraction should happen incrementally.
+
+The entire application does not need to become microservices at once.
+
+## Extraction Criteria
+
+A module should not be extracted merely because it can be.
+
+Before extraction, the following questions should be considered:
+
+- Is there a demonstrated scaling problem?
+- Does the module need a different availability target?
+- Does it require independent deployment?
+- Would failure isolation materially improve the system?
+- Does the module require different infrastructure?
+- Is the operational cost of extraction justified?
+- Are the module boundaries sufficiently stable?
+- Can data ownership be clearly separated?
+- Is asynchronous communication acceptable where required?
+
+If these questions do not reveal a clear benefit, the module should remain within the monolith.
+
+## Alternatives Considered
+
+### Microservices From the Beginning
+
+A microservice architecture could provide:
+
+- Independent deployment
+- Independent scaling
+- Strong process isolation
+- Separate data ownership
+- Technology flexibility
+
+However, these benefits are not currently required.
+
+Starting with microservices would also introduce:
+
+- Network failure modes
+- Increased infrastructure cost
+- More complex testing
+- More complex deployments
+- Distributed observability
+- Cross-service authentication
+- Message delivery concerns
+- Eventual consistency
+- Higher development overhead
+
+This complexity is not justified at the current stage of OshePayment.
+
+### Traditional Layered Monolith
+
+Another option would be a conventional monolith organized primarily around technical layers such as:
+
+```text
+controllers/
+services/
+repositories/
+models/
+```
+
+This approach would be simple initially but could make domain boundaries increasingly difficult to identify as the application grows.
+
+The modular monolith approach was chosen because it retains the simplicity of a single deployment while establishing clearer business boundaries.
+
+## Consequences
+
+### Positive
+
+- Faster initial development
+- Simpler deployment
+- Easier local development
+- Easier debugging
+- Easier integration testing
+- Simpler database transactions
+- Reduced infrastructure requirements
+- Easier refactoring while domain boundaries evolve
+- Allows distributed-systems concepts to be introduced gradually
+- Preserves a path toward future service extraction
+
+### Negative
+
+- All modules initially share the same application process.
+- Poor discipline could result in tight coupling between modules.
+- A failure in one part of the application may affect the entire process.
+- Modules cannot initially scale independently.
+- Independent deployment is not available.
+- Extracting modules later may require significant refactoring if boundaries are not maintained properly.
+
+These drawbacks are accepted for the initial stage of the project.
+
+## Risks
+
+### Modular Monolith Becoming a Big Ball of Mud
+
+The primary architectural risk is allowing modules to bypass their intended boundaries.
+
+For example:
+
+```text
+Payment directly modifies ledger tables
+```
+
+instead of:
+
+```text
+Payment
+   ↓
+Ledger domain operation
+```
+
+Code reviews and architectural discipline should be used to prevent uncontrolled coupling.
+
+### Premature Abstraction
+
+There is also a risk of building excessive interfaces, layers, or abstractions solely in anticipation of future microservices.
+
+The codebase should not simulate distributed services internally unless there is a current need.
+
+The goal is modularity, not artificial complexity.
+
+### Premature Microservice Extraction
+
+As experience with distributed systems grows, there may be a temptation to extract services primarily for learning purposes.
+
+Learning is an important objective of OshePayment, but service extraction should still be tied to a meaningful architectural reason.
+
+Distributed-systems concepts can be introduced when the project reaches a stage where they solve an actual problem.
+
+## Future Review
+
+This decision should be revisited as the platform grows.
+
+A new ADR should be created whenever a module is selected for extraction into an independent service.
+
+For example:
+
+```text
+ADR-00XX: Extract Payment Processing Into an Independent Service
+```
+
+That ADR should document:
+
+- What changed
+- Why the monolithic deployment is no longer sufficient
+- What service boundary is being introduced
+- How data ownership will change
+- How communication will occur
+- What consistency model will be used
+- What new operational complexity is being accepted
+
+## Decision Outcome
+
+OshePayment will begin as a modular monolith.
+
+The application will maintain explicit business-domain boundaries while remaining a single deployable backend system.
+
+Microservices will be treated as an architectural evolution driven by demonstrated requirements rather than as the starting objective.
