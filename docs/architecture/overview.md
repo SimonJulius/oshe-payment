@@ -644,7 +644,9 @@ A message broker may be introduced later when there is a clear requirement for d
 
 ## 14. Persistence
 
-PostgreSQL will be used as the primary relational datastore.
+PostgreSQL is the primary relational datastore. [ADR-003](../adr/003_use-postgresql.md) explains why SQL fits the financial domain, why PostgreSQL was chosen, and the migration and operational policies.
+
+The current foundation uses pgx connection pooling and explicit Goose SQL migrations. Migrations run separately from API startup; domain tables will be added with their owning modules.
 
 The initial implementation may use one PostgreSQL instance while maintaining strong logical ownership of data between modules.
 

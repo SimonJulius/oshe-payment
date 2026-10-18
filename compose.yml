@@ -2,13 +2,18 @@ services:
   postgres:
     image: postgres:18
     environment:
-      - POSTGRES_DB=oshe_payment
-      - POSTGRES_USER=oshe
-      - POSTGRES_PASSWORD=oshe
+      POSTGRES_DB: oshe_payment
+      POSTGRES_USER: oshe
+      POSTGRES_PASSWORD: oshe
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oshe -d oshe_payment"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres_data:
