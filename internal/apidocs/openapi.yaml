@@ -1,0 +1,375 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OshePayment API",
+    "version": "0.1.0",
+    "description": "Development API documentation. Test routes are privileged, opt-in, and must remain disabled in production. Swagger UI loads assets from a public CDN; do not enter secrets on shared machines."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Process liveness",
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Database readiness",
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          },
+          "503": {
+            "description": "Database unavailable"
+          }
+        }
+      }
+    },
+    "/testing/notifications": {
+      "post": {
+        "tags": [
+          "Notification testing"
+        ],
+        "summary": "Enqueue an invitation email",
+        "description": "Disabled by default. Requires NOTIFICATION_TEST_API_ENABLED=true. Privileged testing only: token holders can select any scope and recipient. A separately running notification worker sends real email through Brevo. Repeating an identical request returns the same receipt.",
+        "security": [
+          {
+            "TestToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "idempotency_key",
+                  "recipient",
+                  "template",
+                  "data",
+                  "expires_at"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "platform",
+                      "tenant"
+                    ]
+                  },
+                  "tenant_id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "description": "Required for tenant scope; omit for platform scope."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "recipient": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": [
+                      "invitation.v1"
+                    ]
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Use a future timestamp; reuse the same value on idempotent retries."
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "inviter",
+                      "organization",
+                      "invitation_url"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "inviter": {
+                        "type": "string"
+                      },
+                      "organization": {
+                        "type": "string"
+                      },
+                      "invitation_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Must use HTTPS."
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "scope": "tenant",
+                "tenant_id": "demo-tenant",
+                "idempotency_key": "swagger-invitation-001",
+                "recipient": "you@example.com",
+                "template": "invitation.v1",
+                "expires_at": "2030-01-01T12:00:00Z",
+                "data": {
+                  "name": "Demo User",
+                  "inviter": "Simon",
+                  "organization": "OshePayment Demo",
+                  "invitation_url": "https://example.com/invitations/demo"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Notification receipt. Acceptance is not inbox delivery.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or notification fields"
+          },
+          "401": {
+            "description": "Missing or incorrect test bearer token"
+          },
+          "404": {
+            "description": "Test API disabled"
+          },
+          "409": {
+            "description": "Scoped idempotency key already used with different content"
+          },
+          "503": {
+            "description": "Storage unavailable"
+          }
+        }
+      }
+    },
+    "/testing/notifications/{id}": {
+      "get": {
+        "tags": [
+          "Notification testing"
+        ],
+        "summary": "Read notification status",
+        "security": [
+          {
+            "TestToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "platform",
+                "tenant"
+              ]
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for tenant scope; omit for platform scope."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification receipt. Acceptance is not inbox delivery.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope or ID"
+          },
+          "401": {
+            "description": "Missing or incorrect test bearer token"
+          },
+          "404": {
+            "description": "Notification not found in scope, or test API disabled"
+          },
+          "503": {
+            "description": "Storage unavailable"
+          }
+        }
+      }
+    },
+    "/webhooks/brevo": {
+      "post": {
+        "tags": [
+          "Notification webhook"
+        ],
+        "summary": "Receive a Brevo transactional email event",
+        "description": "Registered only when NOTIFICATION_ENABLED=true. Use the webhook token, not the test API token. Unknown message IDs are stored without changing an unrelated notification. Unsupported tracking events are acknowledged without storage.",
+        "security": [
+          {
+            "BrevoToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event",
+                  "email",
+                  "message-id"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "description": "Handled: request, sent, delivered, deferred, soft_bounce, hard_bounce, blocked, invalid_email, error, spam."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "message-id": {
+                    "type": "string"
+                  },
+                  "ts_event": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Positive Unix seconds; ts is used as fallback."
+                  },
+                  "ts": {
+                    "type": "integer"
+                  },
+                  "X-Mailin-custom": {
+                    "type": "string",
+                    "description": "Optional attempt_id:<UUID> correlation."
+                  }
+                }
+              },
+              "example": {
+                "event": "delivered",
+                "email": "you@example.com",
+                "message-id": "<message-id-from-brevo>",
+                "ts_event": 1793016000
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Acknowledged; does not guarantee a matching notification"
+          },
+          "400": {
+            "description": "Invalid payload (maximum 64 KiB)"
+          },
+          "401": {
+            "description": "Missing or incorrect webhook token"
+          },
+          "404": {
+            "description": "Notifications disabled"
+          },
+          "503": {
+            "description": "Webhook persistence unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "TestToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "NOTIFICATION_TEST_API_TOKEN; test operations only."
+      },
+      "BrevoToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "BREVO_WEBHOOK_TOKEN; provider webhook only."
+      }
+    },
+    "schemas": {
+      "Receipt": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "delivery_status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "accepted",
+              "failed",
+              "unknown",
+              "expired"
+            ]
+          },
+          "delivery_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "deferred",
+              "delivered",
+              "bounced",
+              "blocked",
+              "complained"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -41,13 +41,17 @@ func TestIntegration(t *testing.T) {
 	defer pool.Close()
 	for _, cmd := range []string{"up", "up", "status"} {
 		v, err := Migrate(ctx, url, cmd)
-		if err != nil || v != 1 {
+		if err != nil || v != 2 {
 			t.Fatalf("%s: version=%d err=%v", cmd, v, err)
 		}
 	}
 	var timezone string
 	if err := pool.QueryRow(ctx, "SHOW timezone").Scan(&timezone); err != nil || timezone != "UTC" {
 		t.Fatalf("timezone=%s err=%v", timezone, err)
+	}
+	// Roll back the notification migration before testing the foundation guard.
+	if v, err := Migrate(ctx, url, "down"); err != nil || v != 1 {
+		t.Fatalf("notification rollback: %d %v", v, err)
 	}
 	// A dependent object must prevent destructive rollback, including version updates.
 	if _, err := pool.Exec(ctx, "CREATE TABLE platform.rollback_guard (id bigint PRIMARY KEY)"); err != nil {

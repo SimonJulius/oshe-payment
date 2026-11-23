@@ -15,8 +15,12 @@ The project intentionally begins as a modular monolith to keep development and o
 ## Documentation
 
 - [Architecture Overview](./docs/architecture/overview.md)
+- [Notification Architecture](./docs/architecture/notification.md)
 - [Architecture Decision Records](./docs/adr/)
 - [SQL and PostgreSQL decision](./docs/adr/003_use-postgresql.md)
+- [Build Notification first](./docs/adr/004_build-notification-first.md)
+- [Notification delivery decision](./docs/adr/005_notification-email-delivery.md)
+- [Notification module and setup](./docs/modules/notification.md)
 ## Local development
 
 Requires Go 1.26.2+, Docker Compose, and PostgreSQL 18 (provided by Compose).
@@ -83,3 +87,9 @@ TEST_DATABASE_URL='postgres://user:password@localhost:5432/oshe_test?sslmode=dis
 Integration tests are skipped unless `TEST_DATABASE_URL` is provided. They verify
 connectivity, UTC sessions, repeated migrations, rollback protection and recovery,
 and concurrent migration runners.
+
+## Interactive API documentation
+
+Open `http://localhost:8080/docs` for Swagger UI; `/openapi.yaml` serves the
+OpenAPI specification. See [manual notification testing](docs/modules/notification.md#manual-testing-with-swagger-ui)
+for the opt-in enqueue/status routes, tokens, and worker setup.

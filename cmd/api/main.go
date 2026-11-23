@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SimonJulius/oshe-payment/internal/apidocs"
 	"github.com/SimonJulius/oshe-payment/internal/config"
+	"github.com/SimonJulius/oshe-payment/internal/notification"
 	"github.com/SimonJulius/oshe-payment/internal/platform/postgres"
 )
 
@@ -26,6 +28,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	notificationConfig, err := notification.LoadConfig()
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	pool, err := postgres.Open(ctx, cfg.DatabaseURL, postgres.Options{MaxConns: cfg.DatabaseMaxConns, ConnectTimeout: cfg.DatabaseConnectTimeout})
@@ -34,6 +40,13 @@ func run() error {
 	}
 	defer pool.Close()
 	mux := http.NewServeMux()
+	apidocs.Register(mux)
+	if notificationConfig.TestAPIEnabled {
+		notification.RegisterTestingRoutes(mux, notification.NewService(notification.NewStore(pool)), notificationConfig.TestAPIToken)
+	}
+	if notificationConfig.Enabled {
+		mux.Handle("POST /webhooks/brevo", notification.WebhookHandler(notification.NewStore(pool), notificationConfig.WebhookToken))
+	}
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		checkCtx, cancel := context.WithTimeout(r.Context(), time.Second)

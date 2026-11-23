@@ -243,6 +243,10 @@ The modular monolith will initially be divided into business-oriented modules.
 
 These modules are logical boundaries inside the same deployable application.
 
+The decision to implement Notification before the other business modules is recorded in [ADR-004: Build the Notification Module First](../adr/004_build-notification-first.md).
+
+See [Notification Architecture](notification.md) for the module design, original sequence diagram, tenant boundaries, and delivery lifecycle.
+
 ### 6.1 Identity and Access
 
 Responsible for authentication and authorization.
